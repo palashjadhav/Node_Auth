@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const User = require('../models/User');
 exports.register = async (req, res, next) => {
     try {
@@ -26,6 +27,47 @@ exports.login = async (req, res, next) => {
         res.status(500).json({ error: error.message });
     }
 }
+exports.forgotPassword = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) {
+            res.status(404).json({ error: "Please enter Correct user name" });
+        }
+        const resetToken = user.getResetPasswordToken();
+        await user.save({ validateBeforeSave: false });
+        console.log(resetToken);
+        //send email here 
+        res.status(200).json({ email: user.email });
+
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+
+}
+exports.resetPassword = async (req, res, next) => {
+    //match the token by hashing it
+    const resetPasswordToken = crypto
+        .createHash('sha256')
+        .update(req.params.resettoken)
+        .digest('hex');
+    const user = await User.findOne({
+        resetPasswordToken,
+        resetPasswordExpire: { $gt: Date.now() }
+    });
+    if (!user) {
+        return res.status(400).json({ error: "not valid token" });
+    }
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+    sendTokenResponse(user, 200, res);
+
+}
+exports.me = async (req, res, next) => {
+    res.send(req.user);
+}
 //Sending jwt in cookie
 const sendTokenResponse = (user, statuscode, res) => {
     //Create token
@@ -42,7 +84,4 @@ const sendTokenResponse = (user, statuscode, res) => {
         .cookie('token', token, options)
         .json({ success: true })
 
-}
-exports.me = async (req, res, next) => {
-    res.send(req.user);
-}
+};
