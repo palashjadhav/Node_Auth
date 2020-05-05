@@ -38,7 +38,7 @@ exports.forgotPassword = async (req, res, next) => {
         await user.save({ validateBeforeSave: false });
         console.log(resetToken);
         //send email here 
-        res.status(200).json({ email: user.email });
+        res.status(200).json({ resetToken });
 
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -46,23 +46,29 @@ exports.forgotPassword = async (req, res, next) => {
 
 }
 exports.resetPassword = async (req, res, next) => {
-    //match the token by hashing it
-    const resetPasswordToken = crypto
-        .createHash('sha256')
-        .update(req.params.resettoken)
-        .digest('hex');
-    const user = await User.findOne({
-        resetPasswordToken,
-        resetPasswordExpire: { $gt: Date.now() }
-    });
-    if (!user) {
-        return res.status(400).json({ error: "not valid token" });
+    try {
+        //match the token by hashing it
+        const resetPasswordToken = crypto
+            .createHash('sha256')
+            .update(req.params.resettoken)
+            .digest('hex');
+        const user = await User.findOne({
+            resetPasswordToken,
+            resetPasswordExpire: { $gt: Date.now() }
+        });
+        if (!user) {
+            return res.status(400).json({ error: "not valid token" });
+        }
+        user.password = req.body.password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpire = undefined;
+        await user.save();
+        sendTokenResponse(user, 200, res);
+
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save();
-    sendTokenResponse(user, 200, res);
+
 
 }
 exports.me = async (req, res, next) => {
